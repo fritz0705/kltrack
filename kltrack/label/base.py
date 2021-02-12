@@ -6,6 +6,8 @@ from gi.repository import Pango, PangoCairo
 
 import enum
 
+# The basic unit of measurement in this module are millimeters.
+
 in_mm = lambda mms: mms * 720 / 254
 
 class BaseField(object):
@@ -110,12 +112,14 @@ class Alignment(enum.Enum):
 
 class TextField(BaseField):
     def __init__(self, *args,
+            data_fonts=None,
             data_font=None,
             long_data_font=None,
             alignment=Alignment.LEFT,
             vertical_alignment=Alignment.BOTTOM,
             only_uppercase=False,
             allow_markup=False,
+            text_attributes=None,
             **kwargs):
         super().__init__(*args, **kwargs)
         if data_font is None:
@@ -124,14 +128,19 @@ class TextField(BaseField):
         if long_data_font is None:
             long_data_font = Pango.font_description_from_string(f"DejaVu Sans Condensed")
             long_data_font.set_absolute_size(5_000 * Pango.SCALE)
+        if data_fonts is None:
+            data_fonts = [data_font, long_data_font]
         self.alignment = alignment
         self.vertical_alignment = vertical_alignment
-        self.data_font = data_font
-        self.long_data_font = long_data_font
+        self.data_fonts = data_fonts
         self.only_uppercase = only_uppercase
         self.allow_markup = allow_markup
+        self.text_attributes = text_attributes
 
     def render_data(self, ctx, data):
+        if not data:
+            return
+
         # Prepare Pango layout
         layout = PangoCairo.create_layout(ctx)
         if self.only_uppercase:
@@ -140,12 +149,13 @@ class TextField(BaseField):
             layout.set_markup(data)
         else:
             layout.set_text(data)
-        layout.set_font_description(self.data_font)
-        font_size = self.data_font.get_size() / Pango.SCALE
-        # Compress text if too long for field
-        if self.field_width < layout.get_pixel_size()[0] and self.long_data_font:
-            layout.set_font_description(self.long_data_font)
-            font_size = self.long_data_font.get_size() / Pango.SCALE
+        if self.text_attributes is not None:
+            layout.set_attributes(self.text_attributes)
+        for font in self.data_fonts:
+            font_size = font.get_size() / Pango.SCALE
+            layout.set_font_description(font)
+            if self.field_width >= layout.get_pixel_size()[0]:
+                break
 
         # Apply field width and height for Pango layout engine
         layout.set_width(self.field_width * Pango.SCALE)
@@ -212,7 +222,7 @@ class SplitField(BaseField):
         self.render_border(ctx)
 
 class QRCodeField(BaseField):
-    def __init__(self, *args, qr_parameters={"micro": False}, quiet_zone=4, **kwargs):
+    def __init__(self, *args, qr_parameters={"micro": False, "error": "Q"}, quiet_zone=8, **kwargs):
         self.qr_parameters = qr_parameters
         self.quiet_zone = quiet_zone
         super().__init__(*args, **kwargs)
@@ -233,8 +243,8 @@ class QRCodeField(BaseField):
 
         ctx.save()
         try:
-            ctx.translate(Alignment.CENTER.align_offset(self.field_width, qr_width * scale_factor),
-                    Alignment.CENTER.align_offset(self.field_height, qr_height * scale_factor))
+            ctx.translate(Alignment.CENTER.align_offset(self.field_width, qr_width * scale_factor) + self.padding_left,
+                    Alignment.CENTER.align_offset(self.field_height, qr_height * scale_factor + self.padding_top))
             ctx.scale(scale_factor, scale_factor)
             self._render_matrix(ctx, matrix)
         finally:
@@ -253,25 +263,22 @@ class QRCodeField(BaseField):
                 ctx.translate(1, 0)
             ctx.translate(-len(row), 1)
 
-class BarcodeField(TextField):
+class BarcodeField(BaseField):
     codebook = {'1': ['1', '0', '0', '1', '0', '0', '0', '0', '1'], '2': ['0', '0', '1', '1', '0', '0', '0', '0', '1'], '3': ['1', '0', '1', '1', '0', '0', '0', '0', '0'], '4': ['0', '0', '0', '1', '1', '0', '0', '0', '1'], '5': ['1', '0', '0', '1', '1', '0', '0', '0', '0'], '6': ['0', '0', '1', '1', '1', '0', '0', '0', '0'], '7': ['0', '0', '0', '1', '0', '0', '1', '0', '1'], '8': ['1', '0', '0', '1', '0', '0', '1', '0', '0'], '9': ['0', '0', '1', '1', '0', '0', '1', '0', '0'], '0': ['0', '0', '0', '1', '1', '0', '1', '0', '0'], 'A': ['1', '0', '0', '0', '0', '1', '0', '0', '1'], 'B': ['0', '0', '1', '0', '0', '1', '0', '0', '1'], 'C': ['1', '0', '1', '0', '0', '1', '0', '0', '0'], 'D': ['0', '0', '0', '0', '1', '1', '0', '0', '1'], 'E': ['1', '0', '0', '0', '1', '1', '0', '0', '0'], 'F': ['0', '0', '1', '0', '1', '1', '0', '0', '0'], 'G': ['0', '0', '0', '0', '0', '1', '1', '0', '1'], 'H': ['1', '0', '0', '0', '0', '1', '1', '0', '0'], 'I': ['0', '0', '1', '0', '0', '1', '1', '0', '0'], 'J': ['0', '0', '0', '0', '1', '1', '1', '0', '0'], 'K': ['1', '0', '0', '0', '0', '0', '0', '1', '1'], 'L': ['0', '0', '1', '0', '0', '0', '0', '1', '1'], 'M': ['1', '0', '1', '0', '0', '0', '0', '1', '0'], 'N': ['0', '0', '0', '0', '1', '0', '0', '1', '1'], 'O': ['1', '0', '0', '0', '1', '0', '0', '1', '0'], 'P': ['0', '0', '1', '0', '1', '0', '0', '1', '0'], 'Q': ['0', '0', '0', '0', '0', '0', '1', '1', '1'], 'R': ['1', '0', '0', '0', '0', '0', '1', '1', '0'], 'S': ['0', '0', '1', '0', '0', '0', '1', '1', '0'], 'T': ['0', '0', '0', '0', '1', '0', '1', '1', '0'], 'U': ['1', '1', '0', '0', '0', '0', '0', '0', '1'], 'V': ['0', '1', '1', '0', '0', '0', '0', '0', '1'], 'W': ['1', '1', '1', '0', '0', '0', '0', '0', '0'], 'X': ['0', '1', '0', '0', '1', '0', '0', '0', '1'], 'Y': ['1', '1', '0', '0', '1', '0', '0', '0', '0'], 'Z': ['0', '1', '1', '0', '1', '0', '0', '0', '0'], '-': ['0', '1', '0', '0', '0', '0', '1', '0', '1'], '.': ['1', '1', '0', '0', '0', '0', '1', '0', '0'], ' ': ['0', '1', '1', '0', '0', '0', '1', '0', '0'], '*': ['0', '1', '0', '0', '1', '0', '1', '0', '0']}
 
     def __init__(self, *args, barcode_height=6_000,
             barcode_spacing=250,
-            barcode_alignment=Alignment.LEFT,
-            padding=(250, 250, 750, 6_000),
-            alignment=Alignment.RIGHT,
-            vertical_alignment=Alignment.TOP,
-            show_text=True,
+            alignment=Alignment.CENTER,
+            vertical_alignment=Alignment.BOTTOM,
+            padding=(250, 750, 750, 750),
             **kwargs):
-        super().__init__(*args, alignment=alignment,
-                vertical_alignment=vertical_alignment,
+        super().__init__(*args,
                 padding=padding,
                 **kwargs)
+        self.alignment = alignment
+        self.vertical_alignment = vertical_alignment
         self.barcode_height = barcode_height
         self.barcode_spacing = barcode_spacing
-        self.barcode_alignment = barcode_alignment
-        self.show_text = show_text
 
     def render_barcode(self, ctx, data):
         width = 0
@@ -287,25 +294,22 @@ class BarcodeField(TextField):
             width += self.barcode_spacing
         return width
 
+    def barcode_width(self, data):
+        return ((len(data) + 2) * 16 - 1) * self.barcode_spacing
+
     def render_data(self, ctx, data):
-        font_size = self.data_font.get_size() / Pango.SCALE
-
         # Calculate barcode width from barcode_spacing and len(data)
-        barcode_width = self.barcode_spacing * (len(data) + 1) * 16
+        barcode_width = self.barcode_width(data)
 
-        pos_x = self.barcode_alignment.align_offset(self.field_width, barcode_width)
-        pos_y = Alignment.BOTTOM.align_offset(self.field_height, self.barcode_height)
+        pos_x = self.alignment.align_offset(self.field_width, barcode_width)
+        pos_y = self.vertical_alignment.align_offset(self.field_height, self.barcode_height)
 
-        # Render barcode with 6.4mm offset from left side at bottom
         ctx.save()
         try:
-            ctx.translate(pos_x, pos_y)
+            ctx.translate(pos_x + self.padding_left, pos_y + self.padding_top)
             self.render_barcode(ctx, data)
         finally:
             ctx.restore()
-
-        if self.show_text:
-            TextField.render_data(self, ctx, data)
 
 class ImageField(BaseField):
     def __init__(self, *args, alignment=Alignment.CENTER,

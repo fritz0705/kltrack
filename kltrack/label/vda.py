@@ -33,4 +33,28 @@ class KLTLabel(object):
             finally:
                 ctx.restore()
 
-__all__ = ("KLTLabel", )
+class GTLKLTLabel(object):
+    fields = [
+        BaseField(5_000, 2_000, 43_000 - 5_000, 21_500 - 2_000),
+        BaseField(43_000, 2_000, 101_500 - 43_000, 21_500 - 2_000),
+        BaseField(101_500, 2_000, 153_000 - 101_500, 21_500 - 2_000),
+        BaseField(153_000, 2_000, 210_000 - 5_000 - 153_000, 21_500 - 2_000),
+        BaseField(5_000, 21_500, 43_000 - 5_000, 34_000 - 21_500),
+        BaseField(43_000, 21_500, 111_000 - 43_000, 34_000 - 21_500),
+        BaseField(111_000, 21_500, 153_000 - 111_000, 34_000 - 21_500),
+        BaseField(5_000, 34_000, 153_000 - 5_000, 46_000 - 34_000),
+        BaseField(153_000, 21_500, 210_000 - 5_000 - 153_000, 46_000 - 21_500),
+        BaseField(5_000, 46_000, 107_000 - 5_000, 74_000 - 5_000 - 46_000),
+        BaseField(107_000, 46_000, 210_000 - 5_000 - 107_000, 74_000 - 5_000 - 46_000)
+    ]
+
+    def render(self, ctx, data=None):
+        for field in self.fields:
+            ctx.save()
+            try:
+                ctx.translate(field.position_x, field.position_y)
+                field.render(ctx)
+            finally:
+                ctx.restore()
+
+__all__ = ("KLTLabel", 'GTLKLTLabel')
