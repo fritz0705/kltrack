@@ -239,12 +239,12 @@ class QRCodeField(BaseField):
         matrix = quiet_data + [quiet_data + list(row) + quiet_data for row in matrix] + quiet_data
 
         qr_height, qr_width = len(matrix), max(len(row) for row in matrix)
-        scale_factor = min(self.width / qr_width, self.height / qr_height)
+        scale_factor = min(self.field_width / qr_width, self.field_height / qr_height)
 
         ctx.save()
         try:
             ctx.translate(Alignment.CENTER.align_offset(self.field_width, qr_width * scale_factor) + self.padding_left,
-                    Alignment.CENTER.align_offset(self.field_height, qr_height * scale_factor + self.padding_top))
+                    Alignment.CENTER.align_offset(self.field_height, qr_height * scale_factor) + self.padding_top)
             ctx.scale(scale_factor, scale_factor)
             self._render_matrix(ctx, matrix)
         finally:
