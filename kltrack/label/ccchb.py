@@ -84,12 +84,11 @@ class KLTContainerLabel(object):
             vertical_alignment=Alignment.CENTER,
             data_fonts=description_fonts,
             label_font=label_font)
-        self._org_field = TextField(5_000, 32_000, 30_000, 7_000, '(3) Org',
+        self._org_field = TextField(5_000, 32_000, 30_000, 7_000, '(3) Organisation',
             padding=(250, 250, 0, 250),
             only_uppercase=True,
             **font_settings)
         self._logo_field = ImageField(5_000, 2_000, 30_000, 30_000,
-            show_borders=False,
             label_font=label_font)
 
     def render(self, ctx, data):
@@ -147,31 +146,27 @@ class ExtendedInventoryLabel(object):
                 ctx.restore()
 
 
-class BasicInventoryLabel(object):
-    width = 90_000
-    height = 38_000
+class Inventory62x29Label(object):
+    width = 62_000
+    height = 29_000
 
-    def __init__(self):
-        normal_data_font = Pango.font_description_from_string("DejaVu Sans Condensed")
-        normal_data_font.set_absolute_size(9_000 * Pango.SCALE)
+    def __init__(self, data_font=None):
+        if data_font is None:
+            data_font = Pango.font_description_from_string("Fira Sans")
+            data_font.set_absolute_size(9_000 * Pango.SCALE)
 
-        self._barcode_field = BarcodeField(2_000, 26_000, 86_000, 10_000,
-            padding=(3_000, 250, 1_000, 250),
-            barcode_height=12_000)
-        self._id_field = TextField(2_000, 2_000, 86_000, 24_000,
-            padding=(500, 500, 500, 500),
-            alignment=Alignment.CENTER,
-            vertical_alignment=Alignment.CENTER,
-            data_font=normal_data_font)
+        self._qrcode_field = QRCodeField(0, 0, 29_000, 29_000,
+                quiet_zone=5)
+        self._id_field = TextField(29_000, 2_000, 31_000, 25_000,
+                vertical_alignment=Alignment.CENTER,
+                alignment=Alignment.CENTER,
+                data_fonts=[data_font,])
 
     def render(self, ctx, data):
-        full_id = data.get("full_id") or data.get("id")
-        id_ = data.get("id")
         fields = (
+            (self._qrcode_field, data.get("url")),
             (self._id_field, data.get("id")),
-            (self._barcode_field, data.get("id"))
         )
-        
         for field, field_data in fields:
             ctx.save()
             try:
@@ -181,19 +176,71 @@ class BasicInventoryLabel(object):
             finally:
                 ctx.restore()
 
-class SmallBasicLabel(object):
-    width = 54_000
-    height = 17_000
+class QRCodeLabel(object):
+    def __init__(self, width, height, data_fonts=None):
+        self.width = width
+        self.height = height
 
-    def __init__(self):
-        self._barcode_field = BarcodeField(2_000, 2_000, 50_000, 13_000,
-            barcode_height=10_000,
-            vertical_alignment=Alignment.CENTER)
+        if data_fonts is None:
+            data_fonts = []
+            base_data_font = Pango.font_description_from_string("Fira Sans")
+            for size in range(3, 10):
+                data_font = base_data_font.copy()
+                data_font.set_absolute_size(self.height / size * Pango.SCALE)
+                data_fonts.append(data_font)
+
+        self._qrcode_field = QRCodeField(0, 0, self.height, self.height,
+                quiet_zone=0,
+                padding=(3_000, 250, 3_000, 3_000))
+        self._id_field = TextField(self.height, 0, self.width - self.height,
+                self.height // 2,
+                data_fonts=data_fonts,
+                alignment=Alignment.CENTER,
+                vertical_alignment=Alignment.BOTTOM,
+                padding=(3_000, 3_000, 250, 250))
+        self._description_field = TextField(self.height, self.height // 2,
+                self.width - self.height, self.height // 2,
+                data_fonts=data_fonts,
+                padding=(250, 3_000, 3_000, 250),
+                alignment=Alignment.CENTER,
+                vertical_alignment=Alignment.TOP)
     
     def render(self, ctx, data):
-        id_ = data.get("id")
+        fields = (
+                (self._qrcode_field, data.get("url") or data.get("full_id") or data.get("id")),
+                (self._id_field, data.get("full_id") or data.get("id")),
+                (self._description_field, data.get("description"))
+        )
+        for field, field_data in fields:
+            ctx.save()
+            try:
+                ctx.translate(field.position_x, field.position_y)
+                if field_data is not None:
+                    field.render_data(ctx, field_data)
+            finally:
+                ctx.restore()
+
+class BarcodeLabel(object):
+    def __init__(self, width, height, data_font=None):
+        self.width = width
+        self.height = height
+
+        if data_font is None:
+            data_font = Pango.font_description_from_string("Fira Sans")
+            data_font.set_absolute_size(max(self.height // 4, 6_000) * Pango.SCALE)
+        
+        self._barcode_field = BarcodeField(0, self.height / 2, self.width, self.height / 2,
+                barcode_height=min(6_000, self.height / 2),
+                vertical_alignment=Alignment.TOP)
+        self._id_field = TextField(0, 0, self.width, self.height / 2,
+                alignment=Alignment.CENTER,
+                vertical_alignment=Alignment.BOTTOM,
+                data_fonts=[data_font])
+
+    def render(self, ctx, data):
         fields = (
             (self._barcode_field, data.get("id")),
+            (self._id_field, data.get("full_id") or data.get("id"))
         )
         for field, field_data in fields:
             ctx.save()
@@ -206,24 +253,30 @@ class SmallBasicLabel(object):
 
 if __name__ == "__main__":
     import argparse
+
+    label_types = {
+        "klt_container": KLTContainerLabel,
+        "klt": KLTContainerLabel,
+        "barcode-62x29": lambda: BarcodeLabel(62_000, 29_000),
+        "barcode-90x38": lambda: BarcodeLabel(90_000, 38_000),
+        "barcode-54x17": lambda: BarcodeLabel(54_000, 17_000),
+        "qr-62x29": lambda: QRCodeLabel(62_000, 29_000),
+        "qr-54x17": lambda: QRCodeLabel(54_000, 17_000),
+        "qr-90x38": lambda: QRCodeLabel(90_000, 38_000),
+        "extended_inventory": ExtendedInventoryLabel,
+        "extended": ExtendedInventoryLabel,
+    }
+
     argparser = argparse.ArgumentParser()
     argparser.add_argument("--size", "-s", default="raw", choices=("a4", "a5", "raw"))
     argparser.add_argument("--field", "-f", nargs=2, action="append")
     argparser.add_argument("--output-format", default="pdf", choices=("pdf", "svg"))
     argparser.add_argument("--output-file", default="out.pdf")
     argparser.add_argument("--json")
-    argparser.add_argument("label_type")
+    argparser.add_argument("label_type", choices=tuple(label_types))
     args = argparser.parse_args()
 
-    label= {
-        "klt_container": KLTContainerLabel,
-        "klt": KLTContainerLabel,
-        "basic_inventory": BasicInventoryLabel,
-        "basic": BasicInventoryLabel,
-        "small": SmallBasicLabel,
-        "extended_inventory": ExtendedInventoryLabel,
-        "extended": ExtendedInventoryLabel
-    }[args.label_type]()
+    label = label_types[args.label_type]()
 
     if args.size == "raw":
         surface_width, surface_height = label.width, label.height
