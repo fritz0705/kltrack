@@ -188,13 +188,21 @@ class QRCodeLabel(object):
                 data_font = base_data_font.copy()
                 data_font.set_absolute_size(self.height / size * Pango.SCALE)
                 data_fonts.append(data_font)
+        
+        id_fonts = []
+        for data_font in data_fonts:
+            id_font = data_font.copy()
+            id_font.set_weight(Pango.Weight.BOLD)
+            id_fonts.append(id_font)
 
         self._qrcode_field = QRCodeField(0, 0, self.height, self.height,
                 quiet_zone=0,
+                qr_parameters={},
                 padding=(3_000, 250, 3_000, 3_000))
         self._id_field = TextField(self.height, 0, self.width - self.height,
                 self.height // 2,
-                data_fonts=data_fonts,
+                allow_markup=True,
+                data_fonts=id_fonts,
                 alignment=Alignment.CENTER,
                 vertical_alignment=Alignment.BOTTOM,
                 padding=(3_000, 3_000, 250, 250))
@@ -208,7 +216,7 @@ class QRCodeLabel(object):
     def render(self, ctx, data):
         fields = (
                 (self._qrcode_field, data.get("url") or data.get("full_id") or data.get("id")),
-                (self._id_field, data.get("full_id") or data.get("id")),
+                (self._id_field, data.get("id")),
                 (self._description_field, data.get("description"))
         )
         for field, field_data in fields:
