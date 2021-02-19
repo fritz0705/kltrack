@@ -264,43 +264,50 @@ class QRCodeField(BaseField):
             ctx.translate(-len(row), 1)
 
 class DataMatrixField(BaseField):
-    def __init__(self, *args, max_module_size=400,
+    def __init__(self, *args, max_module_size=500,
+            quiet_zone=None,
             alignment=Alignment.CENTER,
             vertical_alignment=Alignment.CENTER,
             **kwargs):
         self.max_module_size = max_module_size
+        self.quiet_zone = quiet_zone
         self.alignment = alignment
         self.vertical_alignment = vertical_alignment
         super().__init__(*args, **kwargs)
 
     def render_data(self, ctx, data):
-        # Generate Data Matrix code
         import pylibdmtx.pylibdmtx
         dmtx = pylibdmtx.pylibdmtx.encode(data)
 
-        dmtx_width = dmtx.width * self.max_module_size // 5
-        dmtx_height = dmtx.height * self.max_module_size // 5
+        dmtx_pixels = [dmtx.pixels[i] for i in range(0, len(dmtx.pixels), dmtx.bpp // 8)]
+        dmtx_data = [[dmtx_pixels[row_i * dmtx.width + col_i] for col_i in range(0, dmtx.width, 5)] for row_i in range(0, dmtx.height, 5)]
+        if self.quiet_zone is not None:
+            # Strip quiet zone from encoded data
+            dmtx_data = [row[2:-2] for row in dmtx_data[2:-2]]
+            quiet_zone = [255] * self.quiet_zone
+            dmtx_data = [[]] * self.quiet_zone + [quiet_zone + row + quiet_zone for row in dmtx_data] + [[]] * self.quiet_zone
+        dmtx_width = max(len(row) for row in dmtx_data)
+        dmtx_height = len(dmtx_data)
 
-        scale_factor = min(self.field_width / dmtx_width, self.field_height / dmtx_height, 1) * self.max_module_size // 5
+        scale_factor = min(self.field_width / dmtx_width, self.field_height / dmtx_height)
+        if self.max_module_size:
+            scale_factor = min(scale_factor, self.max_module_size)
 
         ctx.save()
         try:
-            ctx.translate(self.alignment.align_offset(self.field_width, dmtx_width) + self.padding_left,
-                self.vertical_alignment.align_offset(self.field_height, dmtx_height) + self.padding_top)
+            ctx.translate(self.alignment.align_offset(self.field_width, dmtx_width * scale_factor) + self.padding_left,
+                self.vertical_alignment.align_offset(self.field_height, dmtx_height * scale_factor) + self.padding_top)
             ctx.scale(scale_factor, scale_factor)
-            self._render_matrix(ctx, dmtx)
+            self._render_matrix(ctx, dmtx_data)
         finally:
             ctx.restore()
     
-    def _render_matrix(self, ctx, dmtx):
-        for row_i in range(dmtx.height):
-            for column_i in range(dmtx.width):
-                d = dmtx.pixels[(row_i * dmtx.height + column_i) * dmtx.bpp // 8]
-                if not d:
-                    ctx.rectangle(0, 0, 1, 1)
+    def _render_matrix(self, ctx, dmtx_data):
+        for i, row in enumerate(dmtx_data):
+            for j, field in enumerate(row):
+                if not field:
+                    ctx.rectangle(j, i, 1, 1)
                     ctx.fill()
-                ctx.translate(1, 0)
-            ctx.translate(-dmtx.width, 1)
 
 class BarcodeField(BaseField):
     codebook = {'1': ['1', '0', '0', '1', '0', '0', '0', '0', '1'], '2': ['0', '0', '1', '1', '0', '0', '0', '0', '1'], '3': ['1', '0', '1', '1', '0', '0', '0', '0', '0'], '4': ['0', '0', '0', '1', '1', '0', '0', '0', '1'], '5': ['1', '0', '0', '1', '1', '0', '0', '0', '0'], '6': ['0', '0', '1', '1', '1', '0', '0', '0', '0'], '7': ['0', '0', '0', '1', '0', '0', '1', '0', '1'], '8': ['1', '0', '0', '1', '0', '0', '1', '0', '0'], '9': ['0', '0', '1', '1', '0', '0', '1', '0', '0'], '0': ['0', '0', '0', '1', '1', '0', '1', '0', '0'], 'A': ['1', '0', '0', '0', '0', '1', '0', '0', '1'], 'B': ['0', '0', '1', '0', '0', '1', '0', '0', '1'], 'C': ['1', '0', '1', '0', '0', '1', '0', '0', '0'], 'D': ['0', '0', '0', '0', '1', '1', '0', '0', '1'], 'E': ['1', '0', '0', '0', '1', '1', '0', '0', '0'], 'F': ['0', '0', '1', '0', '1', '1', '0', '0', '0'], 'G': ['0', '0', '0', '0', '0', '1', '1', '0', '1'], 'H': ['1', '0', '0', '0', '0', '1', '1', '0', '0'], 'I': ['0', '0', '1', '0', '0', '1', '1', '0', '0'], 'J': ['0', '0', '0', '0', '1', '1', '1', '0', '0'], 'K': ['1', '0', '0', '0', '0', '0', '0', '1', '1'], 'L': ['0', '0', '1', '0', '0', '0', '0', '1', '1'], 'M': ['1', '0', '1', '0', '0', '0', '0', '1', '0'], 'N': ['0', '0', '0', '0', '1', '0', '0', '1', '1'], 'O': ['1', '0', '0', '0', '1', '0', '0', '1', '0'], 'P': ['0', '0', '1', '0', '1', '0', '0', '1', '0'], 'Q': ['0', '0', '0', '0', '0', '0', '1', '1', '1'], 'R': ['1', '0', '0', '0', '0', '0', '1', '1', '0'], 'S': ['0', '0', '1', '0', '0', '0', '1', '1', '0'], 'T': ['0', '0', '0', '0', '1', '0', '1', '1', '0'], 'U': ['1', '1', '0', '0', '0', '0', '0', '0', '1'], 'V': ['0', '1', '1', '0', '0', '0', '0', '0', '1'], 'W': ['1', '1', '1', '0', '0', '0', '0', '0', '0'], 'X': ['0', '1', '0', '0', '1', '0', '0', '0', '1'], 'Y': ['1', '1', '0', '0', '1', '0', '0', '0', '0'], 'Z': ['0', '1', '1', '0', '1', '0', '0', '0', '0'], '-': ['0', '1', '0', '0', '0', '0', '1', '0', '1'], '.': ['1', '1', '0', '0', '0', '0', '1', '0', '0'], ' ': ['0', '1', '1', '0', '0', '0', '1', '0', '0'], '*': ['0', '1', '0', '0', '1', '0', '1', '0', '0']}
@@ -375,4 +382,4 @@ class ImageField(BaseField):
             ctx.restore()
 
 __all__ = ("BaseField", "TextField", "QRCodeField", "BarcodeField",
-        "ImageField", "SplitField", "in_mm", "Alignment")
+        "ImageField", "SplitField", "in_mm", "Alignment", "DataMatrixField")

@@ -112,6 +112,57 @@ class KLTContainerLabel(object):
             finally:
                 ctx.restore()
 
+class DataMatrixLabel(object):
+    def __init__(self, width, height, data_fonts=None, font_family="Fira Sans"):
+        self.width = width
+        self.height = height
+
+        if data_fonts is None:
+            data_fonts = []
+            base_data_font = Pango.font_description_from_string(font_family)
+            for size in range(3, 7):
+                data_font = base_data_font.copy()
+                data_font.set_absolute_size(self.height / size * Pango.SCALE)
+                data_fonts.append(data_font)
+        
+        id_fonts = []
+        for data_font in data_fonts:
+            id_font = data_font.copy()
+            id_font.set_weight(Pango.Weight.BOLD)
+            id_fonts.append(id_font)
+        
+        self._dmtx_field = DataMatrixField(0, 0, self.height, self.height,
+            quiet_zone=0,
+            padding=(3_000, 250, 3_000, 3_000))
+        self._id_field = TextField(self.height, 0, self.width - self.height,
+                self.height // 2,
+                allow_markup=True,
+                data_fonts=id_fonts,
+                alignment=Alignment.CENTER,
+                vertical_alignment=Alignment.BOTTOM,
+                padding=(0, 3_000, 250, 250))
+        self._description_field = TextField(self.height, self.height // 2,
+                self.width - self.height, self.height // 2,
+                data_fonts=data_fonts,
+                padding=(0, 3_000, 3_000, 250),
+                alignment=Alignment.CENTER,
+                vertical_alignment=Alignment.TOP)
+        
+    def render(self, ctx, data):
+        fields = (
+                (self._dmtx_field, data.get("url") or data.get("full_id") or data.get("id")),
+                (self._id_field, data.get("id")),
+                (self._description_field, data.get("description"))
+        )
+        for field, field_data in fields:
+            ctx.save()
+            try:
+                ctx.translate(field.position_x, field.position_y)
+                if field_data is not None:
+                    field.render_data(ctx, field_data)
+            finally:
+                ctx.restore()
+
 class QRCodeLabel(object):
     def __init__(self, width, height, data_fonts=None, font_family="Fira Sans"):
         self.width = width
@@ -208,4 +259,4 @@ class BarcodeLabel(object):
             finally:
                 ctx.restore()
 
-__all__ = ("KLTContainerLabel", "QRCodeLabel", "BarcodeLabel")
+__all__ = ("KLTContainerLabel", "QRCodeLabel", "BarcodeLabel", "DataMatrixLabel")

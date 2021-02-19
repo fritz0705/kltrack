@@ -13,6 +13,7 @@ label_types = {
     "qr-62x29": lambda: QRCodeLabel(62_000, 29_000),
     "qr-54x17": lambda: QRCodeLabel(54_000, 17_000),
     "qr-90x38": lambda: QRCodeLabel(90_000, 38_000),
+    "dmtx-54x17": lambda: DataMatrixLabel(54_000, 17_000),
     "klt": KLTLabel,
     "gtl-klt": GTLKLTLabel
 }
