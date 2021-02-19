@@ -222,9 +222,11 @@ class SplitField(BaseField):
         self.render_border(ctx)
 
 class QRCodeField(BaseField):
-    def __init__(self, *args, qr_parameters={"micro": False, "error": "Q"}, quiet_zone=8, **kwargs):
+    def __init__(self, *args, qr_parameters={"micro": False, "error": "Q"}, quiet_zone=8,
+        max_module_size=None, **kwargs):
         self.qr_parameters = qr_parameters
         self.quiet_zone = quiet_zone
+        self.max_module_size = max_module_size
         super().__init__(*args, **kwargs)
 
     def render_data(self, ctx, data):
@@ -240,6 +242,8 @@ class QRCodeField(BaseField):
 
         qr_height, qr_width = len(matrix), max(len(row) for row in matrix)
         scale_factor = min(self.field_width / qr_width, self.field_height / qr_height)
+        if self.max_module_size:
+            scale_factor = min(scale_factor, self.max_module_size)
 
         ctx.save()
         try:
@@ -255,13 +259,11 @@ class QRCodeField(BaseField):
         pass
 
     def _render_matrix(self, ctx, matrix):
-        for row in matrix:
-            for col in row:
-                if col:
-                    ctx.rectangle(0, 0, 1, 1)
+        for i, row in enumerate(matrix):
+            for j, field in enumerate(row):
+                if field:
+                    ctx.rectangle(i, j, 1, 1)
                     ctx.fill()
-                ctx.translate(1, 0)
-            ctx.translate(-len(row), 1)
 
 class DataMatrixField(BaseField):
     def __init__(self, *args, max_module_size=500,
